@@ -31,6 +31,7 @@ type Spec struct {
 	Height           int
 	Deferred         bool
 	Seed             int
+	LargeSize        bool
 }
 
 type File struct {
@@ -194,7 +195,7 @@ func buildCR3(s Spec, jpeg []byte) ([]byte, error) {
 	out = appendBox(out, "ftyp", append([]byte("crx "), []byte{0, 0, 0, 0}...))
 	cmt := append([]byte("CMT1"), tiff...)
 	uuidPayload := append(append([]byte{}, canonUUID()...), cmt...)
-	out = append(out, boxBytes("moov", boxBytes("uuid", uuidPayload))...)
+	out = append(out, boxBytes("moov", uuidBox("uuid", uuidPayload, s.LargeSize))...)
 	out = appendBox(out, "PRVW", jpeg)
 	return out, nil
 }
@@ -209,6 +210,27 @@ func appendBox(dst []byte, typ string, payload []byte) []byte {
 
 func boxBytes(typ string, payload []byte) []byte {
 	return appendBox(nil, typ, payload)
+}
+
+// uuidBox serialises a uuid box. When largeSize is true, the box uses the
+// 64-bit largesize form (size field = 1, followed by an 8-byte extended size)
+// as permitted by ISO/IEC 14496-12 §4.2.3. Some archiving systems rewrite
+// box sizes this way when the payload crosses the 4 GiB threshold.
+func uuidBox(typ string, payload []byte, largeSize bool) []byte {
+	if !largeSize {
+		return boxBytes(typ, payload)
+	}
+	total := 16 + len(payload)
+	b := make([]byte, 0, total)
+	hdr := make([]byte, 8)
+	binary.BigEndian.PutUint32(hdr, 1) // largesize indicator
+	copy(hdr[4:], []byte(typ))
+	b = append(b, hdr...)
+	ls := make([]byte, 8)
+	binary.BigEndian.PutUint64(ls, uint64(total))
+	b = append(b, ls...)
+	b = append(b, payload...)
+	return b
 }
 
 func canonUUID() []byte {

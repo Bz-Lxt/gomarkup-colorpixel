@@ -57,7 +57,7 @@ func walkBoxes(ra RandomAccess, start, end int64, depth int, lim Limits, fn func
 			u, err := readExact(ra, off+header, 16)
 			if err == nil {
 				b.UUID = u
-				b.Header = int64(len(hdr) + len(u))
+				b.Header = header + int64(len(u))
 			}
 		}
 		if err := fn(b); err != nil {
