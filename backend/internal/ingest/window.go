@@ -12,12 +12,6 @@ var captureBuffers = sync.Pool{
 	New: func() any { return new([captureBufferSize]byte) },
 }
 
-func captureBuffer() []byte {
-	buf := captureBuffers.Get().(*[captureBufferSize]byte)
-	captureBuffers.Put(buf)
-	return buf[:]
-}
-
 // Window keeps the first N bytes of a stream in memory and the rest on disk.
 // The original stream is never fully buffered.
 type Window struct {
@@ -32,10 +26,14 @@ func Capture(r io.Reader, destPath string, windowBytes int) (*Window, error) {
 		return nil, err
 	}
 	w := &Window{file: f, head: make([]byte, 0, windowBytes)}
-	buf := captureBuffer()
+	// Exclusive ownership of the scratch buffer for the duration of the read
+	// loop. It is returned to the pool only after Capture finishes, so
+	// concurrent captures never share the same backing array.
+	buf := captureBuffers.Get().(*[captureBufferSize]byte)
+	defer captureBuffers.Put(buf)
 	tee := io.TeeReader(r, f)
 	for {
-		n, err := tee.Read(buf)
+		n, err := tee.Read(buf[:])
 		if n > 0 {
 			w.size += int64(n)
 			if len(w.head) < windowBytes {
