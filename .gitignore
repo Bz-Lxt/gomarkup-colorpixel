@@ -1,0 +1,52 @@
+# Alkaid
+.alkaid-sop
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/backend/bin/
+/backend/server
+/backend/seedgen
+/tmp/
+/data/
+
+# Go
+*.test
+coverage.out
+coverage.html
+
+# Node
+node_modules/
+dist/
+.vite/
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Test artifacts
+playwright-report/
+test-results/
+.pytest_cache/
+
+# Uploads / tiles (runtime)
+backend/var/
+uploads/
+storage/
+/docs/
+/.alkaid-sop
+/CLAUDE.md
+/AGENTS.md
+/.cursorrules
+/.github/
