@@ -61,7 +61,7 @@ func openTIFF(ra RandomAccess, off int64, lim Limits) (*tiffFile, error) {
 	}
 	ifd0 := o.Uint32(head[4:])
 	tf := &tiffFile{order: o, base: off, lim: lim, ra: ra}
-	if err := tf.walkIFDs(off+int64(ifd0), 0); err != nil && len(tf.ifds) == 0 {
+	if err := tf.walkIFDs(off+int64(ifd0), 0); err != nil {
 		return nil, err
 	}
 	return tf, nil
@@ -73,6 +73,9 @@ func (tf *tiffFile) walkIFDs(off int64, depth int) error {
 	}
 	guard := 0
 	for off != tf.base && off != 0 {
+		if off < 0 || off >= tf.ra.Size() {
+			return wrap("tiff.walk", fmt.Errorf("next IFD offset %d out of range", off))
+		}
 		if guard > tf.lim.MaxIFDs {
 			return wrap("tiff.walk", fmt.Errorf("IFD chain too long"))
 		}
@@ -89,12 +92,16 @@ func (tf *tiffFile) walkIFDs(off int64, depth int) error {
 					offs = []uint32{sub.Raw}
 				}
 				for _, so := range offs {
-					_ = tf.walkIFDs(tf.base+int64(so), depth+1)
+					if err := tf.walkIFDs(tf.base+int64(so), depth+1); err != nil {
+						return err
+					}
 				}
 			}
 		}
 		if ex := d.find(tagExifIFD); ex != nil {
-			_ = tf.walkIFDs(tf.base+int64(ex.Raw), depth+1)
+			if err := tf.walkIFDs(tf.base+int64(ex.Raw), depth+1); err != nil {
+				return err
+			}
 		}
 		if d.Next == 0 {
 			break
