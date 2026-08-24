@@ -1,0 +1,88 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      TZ: Asia/Shanghai
+      POSTGRES_USER: colorpixel
+      POSTGRES_PASSWORD: colorpixel
+      POSTGRES_DB: colorpixel
+    ports:
+      - "28383:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U colorpixel -d colorpixel"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    command:
+      - postgres
+      - -c
+      - timezone=Asia/Shanghai
+
+  backend:
+    image: colorpixel-backend:latest
+    restart: unless-stopped
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.from-source
+    environment:
+      TZ: Asia/Shanghai
+      DATABASE_URL: postgres://colorpixel:colorpixel@postgres:5432/colorpixel?sslmode=disable
+      HTTP_ADDR: :8080
+      DATA_DIR: /data
+      PREVIEW_WINDOW_BYTES: "16777216"
+      JWT_SECRET: colorpixel-dev-secret
+      SAMPLE_MODE: "1"
+      LOG_LEVEL: info
+      CORS_ORIGINS: http://localhost:28381
+    volumes:
+      - assetdata:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/server", "-healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 120s
+
+  frontend:
+    image: colorpixel-frontend:latest
+    build:
+      context: ./frontend-user
+      dockerfile: Dockerfile
+    ports:
+      - "28381:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  qa:
+    profiles: ["qa"]
+    build:
+      context: ./tests
+      dockerfile: Dockerfile
+    environment:
+      TZ: Asia/Shanghai
+      BASE_URL: http://frontend
+      API_URL: http://backend:8080
+    volumes:
+      - ./tests/e2e_flow.spec.ts:/e2e/e2e_flow.spec.ts
+      - ./tests/api_smoke.py:/e2e/api_smoke.py
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  assetdata:
